@@ -36,14 +36,75 @@ def check_class_number(records):
 		print('Stopped.')
 
 
+def records_to_yolov5(args):
+	annotation_class_count = {}
+	img_count = 0
+	min_h, max_h, min_w, max_w = 9999, 0, 9999, 0
+	cnt = 0
+	try:
+		for tf_file in args.tf_file:
+			it = tf.python_io.tf_record_iterator(tf_file)
+			while True:
+				try:
+					example = next(it)
+				except DataLossError:
+					print('ERROR - Data loss. {} index: {}'.format(tf_file, img_count))
+					break
+				except StopIteration:
+					break
+				result = tf.train.Example.FromString(example)
+				raw_image = result.features.feature['image/encoded'].bytes_list.value[0]
+				height = result.features.feature['image/height'].int64_list.value[0]
+				width = result.features.feature['image/width'].int64_list.value[0]
+				xmin = result.features.feature['image/object/bbox/xmin'].float_list.value
+				xmax = result.features.feature['image/object/bbox/xmax'].float_list.value
+				ymin = result.features.feature['image/object/bbox/ymin'].float_list.value
+				ymax = result.features.feature['image/object/bbox/ymax'].float_list.value
+				text = result.features.feature['image/object/class/text'].bytes_list.value			# [b'head', b'person', b'smoke', b'fire', 'helmet']
+				label = result.features.feature['image/object/class/label'].int64_list.value		# [0,1,4,3,2]
+
+				# process image
+				out = io.BytesIO(raw_image)
+				pil_image = Image.open(out)
+				if pil_image.mode == 'RGBA':
+					pil_image = pil_image.convert('RGB')
+				cv_img = np.array(pil_image)
+
+				# save directory
+				if not os.path.exists(os.path.joint(args.save_dir, 'images')):
+					os.makedirs(os.path.join(args.save_dir, 'images'))
+				if not os.path.exists(os.path.join(args.save_dir, 'labels')):
+					os.makedirs(os.path.join(args.save_dir, 'labels'))
+
+
+				# save process
+				im = Image.fromarray(cv_img)
+				if isinstance(im, Image.Image):
+					str_cnt = str(cnt).zfill(6)
+					image_output_path = '{}/images/{}.jpg'.format(args.save_dir, str_cnt)
+					im.save(image_output_path, format='JPEG')
+
+					label_output_path = '{}/labels/{}.txt'.format(args.save_dir, str_cnt)
+					with open(label_output_path, 'w') as f:
+						for i, lab in enumerate(label):
+							f.write()
+
+
+
+	except KeyboardInterrupt:
+		print('Stopped.')
+
+
+
 def arg_parse():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('tf_file', nargs='+', help='path of tf record file.')
+	parser.add_argument('--check_cls', action='store_true', help="check record's label classes min to max.")
+	parser.add_argument('-s', '--save_dir', default=None, type=str, help='directory to save datasets.')
+
 	parser.add_argument('-d', '--display_image', action='store_true', help='display images.')
 	parser.add_argument('-v', '--verbose', action='store_true', help='print annotations per image.')
-	parser.add_argument('-s', '--save_image_dir', default=None, type=str, help='directory to save image.')
 	parser.add_argument('-p', '--polygon', action='store_true', help='show polygon as masked image.')
-	parser.add_argument('--check_cls', action='store_true', help="check record's label classes min to max.")
 	_args = parser.parse_args()
 	return _args
 
@@ -57,6 +118,8 @@ def main():
 		for ret, record in zip(rets, tf_records):
 			print(f"{record}: {ret}")
 		sys.exit(0)
+
+	ret = records_to_yolov5(args)
 
 
 
