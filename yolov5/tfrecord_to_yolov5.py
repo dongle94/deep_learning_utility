@@ -71,7 +71,7 @@ def records_to_yolov5(args):
 				cv_img = np.array(pil_image)
 
 				# save directory
-				if not os.path.exists(os.path.joint(args.save_dir, 'images')):
+				if not os.path.exists(os.path.join(args.save_dir, 'images')):
 					os.makedirs(os.path.join(args.save_dir, 'images'))
 				if not os.path.exists(os.path.join(args.save_dir, 'labels')):
 					os.makedirs(os.path.join(args.save_dir, 'labels'))
@@ -81,16 +81,29 @@ def records_to_yolov5(args):
 				im = Image.fromarray(cv_img)
 				if isinstance(im, Image.Image):
 					str_cnt = str(cnt).zfill(6)
-					image_output_path = '{}/images/{}.jpg'.format(args.save_dir, str_cnt)
+					image_output_path = '{}/images/{}_{}.jpg'.format(args.save_dir, args.prefix, str_cnt)
 					im.save(image_output_path, format='JPEG')
 
-					label_output_path = '{}/labels/{}.txt'.format(args.save_dir, str_cnt)
+					label_output_path = '{}/labels/{}_{}.txt'.format(args.save_dir, args.prefix, str_cnt)
 					with open(label_output_path, 'w') as f:
 						for i, lab in enumerate(label):
-							f.write()
+							_xmin, _xmax = xmin[i], xmax[i]
+							_ymin, _ymax = ymin[i], ymax[i]
+							x_center = round((_xmin + _xmax) / 2, 6)
+							y_center = round((_ymin + _ymax) / 2, 6)
+							width_rel = round(_xmax - _xmin, 6)
+							height_rel = round(_ymax - _ymin, 6)
+							xywh_str = f"{str(lab- args.downclass)} {str(x_center)}  {str(y_center)} {str(width_rel)} {str(height_rel)}\n"
+							f.write(xywh_str)
+					cnt += 1
+				pil_image.close()
+				out.close()
+				img_count += 1
 
+		print(f'Total {img_count} images.')
+		print('==============================================')
 
-
+		print('==============================================')
 	except KeyboardInterrupt:
 		print('Stopped.')
 
@@ -101,8 +114,12 @@ def arg_parse():
 	parser.add_argument('tf_file', nargs='+', help='path of tf record file.')
 	parser.add_argument('--check_cls', action='store_true', help="check record's label classes min to max.")
 	parser.add_argument('-s', '--save_dir', default=None, type=str, help='directory to save datasets.')
+	parser.add_argument('--prefix', default='', type=str, help='Prefix for images & labels file name.')
+	parser.add_argument('--downclass', default=0, type=int,
+						help='If classes start from not 0, you write minimum value of class number. It will makes '
+							 'output labels class number from 0. And you can not know class number distribution, '
+							 'execute with --check_cls option.')
 
-	parser.add_argument('-d', '--display_image', action='store_true', help='display images.')
 	parser.add_argument('-v', '--verbose', action='store_true', help='print annotations per image.')
 	parser.add_argument('-p', '--polygon', action='store_true', help='show polygon as masked image.')
 	_args = parser.parse_args()
