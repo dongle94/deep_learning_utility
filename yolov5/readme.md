@@ -20,7 +20,7 @@ $ pip install torch==1.10.1+cu111 torchvision==0.11.2+cu111 torchaudio==0.10.1 -
 ```
 
 ## Installation
-Using `pip` for setting environments.
+This is requirements for yolov5 r6.1. Using `pip` for setting environments.
 
 | Module          |  Require   |      MyVersion       |
 |-----------------|:----------:|:--------------------:|
@@ -44,3 +44,21 @@ Using `pip` for setting environments.
 | thop            |     -      | 0.1.0.post2206102148 |
 
 # TF Record to Yolov5 Dataset
+
+## Requirements
+Processing TF Record to Yolov5 datasets doesn't need CUDA function. So it is not need tensorflow-gpu.
+
+
+| Module         |  Require   |       MyVersion       |
+|----------------|:----------:|:---------------------:|
+| tensorflow     | \<= 1.15.x | tensorflow-cpu 1.15.0 |
+| numpy          |     -      |        1.21.6         |
+| opencv-python  | \>= 4.1.2  |       4.5.5.64        |
+| imgaug         |     -      |         0.4.0         |
+| pillow         |     -      |         9.1.1         |
+
+## Executes
+You need tfrecord you want change dataset to yolov5.
+```commandline
+$ python tfrecord_to_yolov5.py {tf_record} -s {save_dir} --prefix {file_prefix} --downclass {min_class_number}
+```
