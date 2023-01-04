@@ -1,7 +1,8 @@
 import os
 import argparse
 import json
-import shutil
+import numpy as np
+import skimage.io
 
 
 def arg_parse():
@@ -15,7 +16,7 @@ def arg_parse():
 
 
 def get_files_path(path, d):
-    if os.path.isfile(path) and os.path.splitext(path)[-1] in ['.jpg', '.json']:
+    if os.path.isfile(path) and os.path.splitext(path)[-1] in ['.jpg', '.jpeg', '.png', '.json']:
         f_name = os.path.splitext(os.path.basename(path))[0]
         d[f_name] = path
         return
@@ -33,9 +34,9 @@ def main():
     o_image_dir = os.path.join(output_dir, 'images')
     o_label_dir = os.path.join(output_dir, 'labels')
 
-    if not os.path.exists(output_dir):
-        os.makedirs(o_image_dir)
-        os.makedirs(o_label_dir)
+    #if not os.path.exists(output_dir):
+    #    os.makedirs(o_image_dir)
+    #    os.makedirs(o_label_dir)
 
 
     images = {}
@@ -44,65 +45,88 @@ def main():
     labels = {}
     get_files_path(label_dir, labels)
     #[print(l, labels[l]) for l in labels]
-    _classes = {
-        "WO-01": 0,  # 작업자
-        "WO-02": 0,  # 수신원
-        "WO-04": 0,  # 안전모 미착용
-        "WO-07": 0  # 안전화 미착용
-    }
+
+    # 저장경로 생성
+    for k, v in NEED_CLASS.items():
+        if not os.path.exists(os.path.join(output_dir, v)):
+            os.makedirs(os.path.join(output_dir, v))
+
+    num_images = 0
+
+
     for idx, (label, label_path) in enumerate(labels.items()):
-        # 해당 라벨의 이미지가 존재하는지 체크
+        # 해당 라벨에 해당하는 이미지가 존재하는지 체크
         if label not in images:
             continue
 
-        # 라벨 파싱
-        with open(label_path, encoding='utf8') as f:
-            j_label = json.load(f)
-        _img_width = j_label["Raw Data Info."]["resolution"][0]
-        _img_height = j_label["Raw Data Info."]["resolution"][1]
 
-        for obj in j_label["Learning Data Info."]["annotation"]:
-            # 박스없는건 넘어가기
-            if 'box' not in obj:
-                continue
-            _img_class_orig = obj["class_id"]
-            _img_coord = obj["box"]
-            rel_coord = [
-                _img_coord[0] / _img_width,
-                _img_coord[1] / _img_height,
-                _img_coord[2] / _img_width,
-                _img_coord[3] / _img_height
-            ]
+        try:
+            # 라벨 파싱
+            with open(label_path, encoding='utf8') as f:
+                j_label = json.load(f)
+            _img_width = j_label["image"]["resolution"][0]
+            _img_height = j_label["image"]["resolution"][1]
+            check_images = False
+            for obj in j_label["annotations"]:
+                # 박스없는건 넘어가기
+                if 'box' not in obj:
+                    continue
+                if not check_images:
+                    num_images += 1
+                    check_images = True
 
-            # 원하는 클래스 인지 체크
-            if _img_class_orig not in NEED_CLASS:
-                continue
+                _img_class_orig = obj["class"]
+                _img_coord = obj["box"]
 
-            # 이미지 복사
-            shutil.copy(images[label], o_image_dir)
+                # 원하는 클래스 인지 체크
+                if _img_class_orig not in NEED_CLASS:
+                    continue
+                # 비정상적 사이즈는 아닌지 체크
+                if _img_coord[3]-_img_coord[1] == 0 or _img_coord[2]-_img_coord[0] == 0:
+                    continue
 
-            # 라벨 생성
-            f_name = os.path.join(o_label_dir, label + '.txt')
-            with open(f_name, mode='a', encoding='utf8') as f:
-                _classes[_img_class_orig] += 1
-                txt = f'{NEED_CLASS[_img_class_orig]} {rel_coord[0]} {rel_coord[1]} {rel_coord[2]} {rel_coord[3]}\n'
-                f.write(txt)
+
+                # 이미지 크롭하여 생성
+                # print(images[label])
+                img_arr = skimage.io.imread(images[label], as_gray=False)
+                # print(img_arr.shape, type(img_arr), _img_coord, _img_class_orig)
+                crop_img = img_arr[_img_coord[1]:_img_coord[3], _img_coord[0]:_img_coord[2]]
+                # print(crop_img.shape, type(crop_img), np.max(crop_img), np.min(crop_img))
+
+                # import cv2
+                # cv2.imshow("-", cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
+                # cv2.waitKey(0)
+
+                # 크롭이미지 저장
+                save_path = os.path.join(output_dir, NEED_CLASS[_img_class_orig], os.path.basename(images[label]))
+                skimage.io.imsave(save_path, crop_img)
+                num_classes[_img_class_orig] += 1
+        except Exception as e:
+            print(e)
+            print(images[label])
 
         if idx % 100 == 0:
             print(f"{idx} image copied.")
 
     # 결과 파일 생성
     with open(os.path.join(output_dir, data_type+'_result.txt'), mode='w', encoding='utf8') as f:
-        f.write(f"result: {_classes}")
-    print(f"result: {_classes}")
+        f.write(f"num_images: {num_images}\n")
+        f.write(f"result: {num_classes}")
+    print(f"num_images: {num_images} / result: {num_classes}")
 
 
 if __name__ == '__main__':
     # AIHUB 고소작업자 안전 영상 데이터
+    num_classes = {
+        "05": 0,  # 안전화 착용
+        "06": 0,  # 안전화 미착용
+        #"07": 0,  # 안전모 착용
+        #"08": 0   # 안전모 미착용
+    }
     NEED_CLASS = {
-        "WO-01": 1,     # 작업자
-        "WO-02": 1,     # 수신원
-        "WO-04": 0,     # 안전모 미착용
-        "WO-07": 2      # 안전화 미착용
+        "05": "safety-shoes",     # 안전화 착용
+        "06": "normal-shoes",     # 안전화 미착용
+        #"07": "helmet",           # 안전모 착용
+        #"08": "no-helmet"         # 안전모 미착용
     }
     main()
