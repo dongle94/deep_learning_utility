@@ -71,10 +71,6 @@ def main():
                 # 박스없는건 넘어가기
                 if 'box' not in obj:
                     continue
-                if not check_images:
-                    num_images += 1
-                    check_images = True
-
                 _img_class_orig = obj["class"]
                 _img_coord = obj["box"]
 
@@ -96,7 +92,9 @@ def main():
                 # import cv2
                 # cv2.imshow("-", cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
                 # cv2.waitKey(0)
-
+                if not check_images:
+                    num_images += 1
+                    check_images = True
                 # 크롭이미지 저장
                 save_path = os.path.join(output_dir, NEED_CLASS[_img_class_orig], os.path.basename(images[label]))
                 skimage.io.imsave(save_path, crop_img)
